@@ -50,7 +50,7 @@ ACTION atomicswap::transfer(const eosio::name& from,
     auto it = this->locks.find(key);
     eosio_assert(it == this->locks.end(), "there are same lockId!");
 
-    // FIXME zhoukai.zk
+    // FIXME mk.zk
     // If any part of the transaction fails, the inline actions will unwind with the rest of the transaction. 
     // Calling the inline action generates no notification outside the scope of the transaction, 
     // regardless of success or failure. 
@@ -90,7 +90,7 @@ ACTION atomicswap::lockmoney(eosio::name sender, eosio::name receiver, eosio::as
 
 ACTION atomicswap::withdraw(const capi_checksum256& lockid, const std::string& preimage, eosio::name receiver) {
     require_auth(receiver);
-    // TODO zhoukai.zk
+    // TODO mk.zk
     // wrapper these func
     //print("withdraw in from: ", eosio::name{this->_self}, " to ---> ", eosio::name{receiver}, " preimage ", preimage.c_str(), "\n");
 
@@ -110,7 +110,7 @@ ACTION atomicswap::withdraw(const capi_checksum256& lockid, const std::string& p
     eosio_assert(it->receiver == receiver, "receiver error");
     eosio_assert(it->lock_number > now(), "time is already greater than lock time");
 
-    // TODO zhoukai.zk
+    // TODO mk.zk
     // receiver bypass with ctx? or passthrough args
     this->locks.modify(it, this->_self, [](auto& lockid) {
             lockid.withdrawn = 1;
@@ -121,7 +121,7 @@ ACTION atomicswap::withdraw(const capi_checksum256& lockid, const std::string& p
 }
 
 ACTION atomicswap::refund(const capi_checksum256& lockid, eosio::name sender) {
-    // TODO zhoukai.zk
+    // TODO mk.zk
     require_auth(sender);
     // wrapper these func
     //print("withdraw in from: ", eosio::name{this->_self}, " to ---> ", eosio::name{receiver}, " preimage ", preimage.c_str(), "\n");
@@ -142,7 +142,7 @@ ACTION atomicswap::refund(const capi_checksum256& lockid, eosio::name sender) {
     this->inline_transfer(this->_self, sender, it->quantity, "refund");
 }
 
-// FIXME zhoukai.zk
+// FIXME mk.zk
 // Temporary implementation
 ACTION atomicswap::cleanup() {
     auto iter = this->locks.begin();
