@@ -19,8 +19,26 @@ private:
 
         uint64_t primary_key() const { return uint64_hash(lock_id); }
     };
-
     eosio::multi_index<"lockid"_n, lockid> locks;
+
+    struct [[eosio::table]] feegroup {
+        eosio::name account;
+        uint64_t fee_rate;
+
+        uint64_t primary_key() const { return account.value; }
+    };
+    eosio::multi_index<"feegroup"_n, feegroup> fees;
+
+    struct [[eosio::table]] adminstate {
+        uint64_t id = 0;
+        eosio::name admin;
+        eosio::name fee_account;
+        uint64_t fee_rate = 500;
+        uint64_t decimal = 10000;
+
+        uint64_t primary_key() const { return id; }
+    };
+    eosio::multi_index<"adminstate"_n, adminstate> adminstates;
 
     void inline_transfer(eosio::name from, eosio::name to, eosio::asset quantity, std::string memo) const {
         struct transfer {
@@ -63,19 +81,26 @@ private:
         *lock_period = stoul(container);
     }
 
+
 public:
     using contract::contract;
 
     atomicswap(eosio::name receiver, eosio::name code, eosio::datastream<const char*> ds) :
         contract(receiver, code, ds),
-        locks(receiver, receiver.value)
+        locks(receiver, receiver.value),
+        fees(receiver, receiver.value),
+        adminstates(receiver, receiver.value)
     {
     }
 
-    ACTION transfer(const eosio::name& from, const eosio::name& to, const eosio::asset& quantity, const std::string& memo);
+    ACTION whentransfer(const eosio::name& from, const eosio::name& to, const eosio::asset& quantity, const std::string& memo);
+    ACTION withdraw(const capi_checksum256& lockid, const std::string& preimage,const eosio::name& opaccount);
+    ACTION refund(const capi_checksum256& lockid);
     ACTION lockmoney(eosio::name sender, eosio::name receiver, eosio::asset quantity, const std::string& hash_value, uint32_t lock_period);
-    ACTION withdraw(const capi_checksum256& lockid, const std::string& preimage, eosio::name receiver);
-    ACTION refund(const capi_checksum256& lockid, eosio::name sender);
+    ACTION setfeegroup(const eosio::name& account, uint64_t fee_rate);
+    ACTION setfeeac(const eosio::name& account);
+    ACTION setadmin(const eosio::name& account);
+    ACTION setdefee(uint64_t fee_rate);
     ACTION cleanup();
 };
 
@@ -84,7 +109,7 @@ void apply(uint64_t receiver, uint64_t code, uint64_t action) {
     auto self = receiver;
 
     if ((code == "eosio.token"_n.value) && (action == "transfer"_n.value)) {
-        execute_action(eosio::name(receiver), eosio::name(code), &atomicswap::transfer);
+        execute_action(eosio::name(receiver), eosio::name(code), &atomicswap::whentransfer);
         return;
     }
 
@@ -100,6 +125,18 @@ void apply(uint64_t receiver, uint64_t code, uint64_t action) {
             break;
         case eosio::name("refund").value:
             execute_action(eosio::name(receiver), eosio::name(code), &atomicswap::refund);
+            break;
+        case eosio::name("setfeegroup").value:
+            execute_action(eosio::name(receiver), eosio::name(code), &atomicswap::setfeegroup);
+            break;
+        case eosio::name("setfeeac").value:
+            execute_action(eosio::name(receiver), eosio::name(code), &atomicswap::setfeeac);
+            break;
+        case eosio::name("setadmin").value:
+            execute_action(eosio::name(receiver), eosio::name(code), &atomicswap::setadmin);
+            break;
+        case eosio::name("setdefee").value:
+            execute_action(eosio::name(receiver), eosio::name(code), &atomicswap::setdefee);
             break;
         case eosio::name("cleanup").value:
             execute_action(eosio::name(receiver), eosio::name(code), &atomicswap::cleanup);

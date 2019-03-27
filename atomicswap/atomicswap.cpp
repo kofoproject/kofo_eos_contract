@@ -3,7 +3,7 @@
 
 #include "atomicswap.hpp"
 
-ACTION atomicswap::transfer(const eosio::name& from,
+ACTION atomicswap::whentransfer(const eosio::name& from,
                             const eosio::name& to, 
                             const eosio::asset& quantity,
                             const std::string& memo) {
@@ -68,6 +68,8 @@ ACTION atomicswap::transfer(const eosio::name& from,
             lockid.refunded = 0;
     });
 
+    require_recipient(this->_self);
+
     struct lockmoney {
         eosio::name from;
         eosio::name to; 
@@ -75,6 +77,7 @@ ACTION atomicswap::transfer(const eosio::name& from,
         std::string hash_value;
         uint32_t lock_period;
     };  
+
     eosio::action(
             eosio::permission_level(this->_self, ("active"_n)),
             this->_self,
@@ -88,12 +91,12 @@ ACTION atomicswap::lockmoney(eosio::name sender, eosio::name receiver, eosio::as
     require_auth(this->_self);
 }
 
-ACTION atomicswap::withdraw(const capi_checksum256& lockid, const std::string& preimage, eosio::name receiver) {
-    require_auth(receiver);
+ACTION atomicswap::withdraw(const capi_checksum256& lockid, const std::string& preimage , const eosio::name& opaccount) {
     // TODO mk.zk
     // wrapper these func
-    //print("withdraw in from: ", eosio::name{this->_self}, " to ---> ", eosio::name{receiver}, " preimage ", preimage.c_str(), "\n");
+    // print("withdraw in from: ", eosio::name{this->_self}, " to ---> ", eosio::name{receiver}, " preimage ", preimage.c_str(), "\n");
 
+    require_auth(opaccount);
     const uint64_t key = uint64_hash(lockid);
     auto it = this->locks.find(key);
     eosio_assert(it != this->locks.end(), "no lock for this lockId");
@@ -107,7 +110,6 @@ ACTION atomicswap::withdraw(const capi_checksum256& lockid, const std::string& p
     
     eosio_assert(it->hash_value.compare(hash_second) == 0, "preimage error");
     eosio_assert(it->withdrawn == 0, "lock is already withdraw");
-    eosio_assert(it->receiver == receiver, "receiver error");
     eosio_assert(it->lock_number > now(), "time is already greater than lock time");
 
     // TODO mk.zk
@@ -116,15 +118,31 @@ ACTION atomicswap::withdraw(const capi_checksum256& lockid, const std::string& p
             lockid.withdrawn = 1;
     });
 
-    this->inline_transfer(this->_self, receiver, it->quantity, "withdraw");
+    uint64_t fee_rate;
+    auto fee_iter = this->fees.find(opaccount.value);
+    if (fee_iter != this->fees.end()) {
+        fee_rate = fee_iter->fee_rate;
+    } else {
+        fee_rate = this->adminstates.cbegin()->fee_rate;
+    }
+
+    auto eos_fee = it->quantity * fee_rate / this->adminstates.cbegin()->decimal;
+
+    if (eos_fee.amount > 0)
+    {
+        // transfer fee to feeAccount
+        this->inline_transfer(this->_self, this->adminstates.cbegin()->fee_account, eos_fee, "withdraw fee");
+    }
+    
+    // transfer with sub fee
+    auto eos_amount = it->quantity - eos_fee;
+    this->inline_transfer(this->_self, it->receiver, eos_amount, "withdraw");
     //print("withdraw out from: ", eosio::name{this->_self}, " to ---> ", eosio::name{receiver});
 }
 
-ACTION atomicswap::refund(const capi_checksum256& lockid, eosio::name sender) {
+ACTION atomicswap::refund(const capi_checksum256& lockid) {
     // TODO mk.zk
-    require_auth(sender);
     // wrapper these func
-    //print("withdraw in from: ", eosio::name{this->_self}, " to ---> ", eosio::name{receiver}, " preimage ", preimage.c_str(), "\n");
 
     const uint64_t key = uint64_hash(lockid);
     auto it = this->locks.find(key);
@@ -132,21 +150,94 @@ ACTION atomicswap::refund(const capi_checksum256& lockid, eosio::name sender) {
 
     eosio_assert(it->withdrawn == 0, "lock is already withdraw");
     eosio_assert(it->refunded == 0, "lock is already refund");
-    eosio_assert(it->sender == sender, "sender error");
     eosio_assert(it->lock_number < now(), "time is less than lock time");
 
     this->locks.modify(it, this->_self, [](auto& lockid) {
             lockid.refunded = 1;
     });
 
-    this->inline_transfer(this->_self, sender, it->quantity, "refund");
+    this->inline_transfer(this->_self, it->sender, it->quantity, "refund");
 }
+
+// TODO mk.zk
+// add del account fee methods
+// change auth to admin instead of contract self
+ACTION atomicswap::setfeegroup(const eosio::name& account, uint64_t fee_rate) {
+    require_auth(this->_self);
+
+    // eosio_assert(fee_rate >= 0 && fee_rate <= 1, "invalid fee");
+    eosio_assert(fee_rate >= 0 && fee_rate < this->adminstates.cbegin()->decimal, "invalid fee_rate");
+    auto it = this->fees.find(account.value);
+    if (it != this->fees.end()) {
+        this->fees.modify(it, this->_self, [fee_rate](auto& feegroup) {
+                feegroup.fee_rate = fee_rate;
+                });
+    } else {
+        this->fees.emplace(this->_self, [account, fee_rate](auto& feegroup) {
+                feegroup.account = account;
+                feegroup.fee_rate = fee_rate;
+                });
+    }
+}
+
+ACTION atomicswap::setfeeac(const eosio::name& account) {
+    require_auth(this->_self);
+
+    if (this->adminstates.cbegin() == this->adminstates.cend()) {
+        this->adminstates.emplace(this->_self, [&](auto &target) {
+                target.id = 0;
+                target.fee_account = account;
+                });
+    } else {
+        this->adminstates.modify(this->adminstates.cbegin(), this->_self, [&](auto &target) {
+                target.fee_account = account;
+                });
+    }
+}
+
+ACTION atomicswap::setadmin(const eosio::name& account) {
+    require_auth(this->_self);
+
+    if (this->adminstates.cbegin() == this->adminstates.cend()) {
+        this->adminstates.emplace(this->_self, [&](auto &target) {
+                target.id = 0;
+                target.admin = account;
+                });
+    } else {
+        this->adminstates.modify(this->adminstates.cbegin(), this->_self, [&](auto &target) {
+                target.admin = account;
+                });
+    }
+}
+
+ACTION atomicswap::setdefee(uint64_t fee_rate) {
+    require_auth(this->_self);
+
+    eosio_assert(fee_rate >= 0 && fee_rate < this->adminstates.cbegin()->decimal, "invalid fee_rate");
+    if (this->adminstates.cbegin() == this->adminstates.cend()) {
+        this->adminstates.emplace(this->_self, [&](auto &target) {
+                target.id = 0;
+                target.fee_rate = fee_rate;
+                });
+    } else {
+        this->adminstates.modify(this->adminstates.cbegin(), this->_self, [&](auto &target) {
+                target.fee_rate = fee_rate;
+                });
+    }
+}
+
+
 
 // FIXME mk.zk
 // Temporary implementation
 ACTION atomicswap::cleanup() {
+    require_auth(this->_self);
     auto iter = this->locks.begin();
     while (iter != this->locks.cend()) {
         iter = this->locks.erase(iter);
+    }
+    auto adminiter = this->adminstates.begin();
+    while (adminiter != this->adminstates.cend()) {
+        adminiter = this->adminstates.erase(adminiter);
     }
 }

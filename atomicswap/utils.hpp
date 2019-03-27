@@ -4,6 +4,8 @@
 #include <eosiolib/singleton.hpp>
 #include <eosiolib/time.hpp>
 
+#include <math.h>
+
 using namespace eosio;
 using namespace std;
 
@@ -72,4 +74,8 @@ size_t sub2sep(const string& input,
     }
     *output = input.substr(first_pos, pos - first_pos);
     return pos;
+}
+
+uint64_t fee_percent_apply(uint64_t amount, double fee_rate) {
+    return uint64_t(ceil(amount * fee_rate));
 }
