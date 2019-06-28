@@ -11,6 +11,7 @@ private:
         capi_checksum256 lock_id;
         eosio::name sender;
         eosio::name receiver;
+        eosio::name contract;
         eosio::asset quantity;
         std::string hash_value;
         uint32_t lock_number;
@@ -18,8 +19,17 @@ private:
         uint8_t refunded = 0;
 
         uint64_t primary_key() const { return uint64_hash(lock_id); }
+        uint64_t get_lock_time() const {return lock_number;}
     };
-    eosio::multi_index<"lockid"_n, lockid> locks;
+    eosio::multi_index<"lockid"_n, lockid, indexed_by<"locknumber"_n,const_mem_fun<lockid, uint64_t, &lockid::get_lock_time>>> locks;
+
+    struct [[eosio::table]] symbols {
+
+        eosio::extended_symbol extsymbol;
+
+        uint64_t primary_key() const { return uint64_hash(extsymbol); }
+    };
+    eosio::multi_index<"symbols"_n, symbols> supportsymbols;
 
     struct [[eosio::table]] feegroup {
         eosio::name account;
@@ -40,7 +50,7 @@ private:
     };
     eosio::multi_index<"adminstate"_n, adminstate> adminstates;
 
-    void inline_transfer(eosio::name from, eosio::name to, eosio::asset quantity, std::string memo) const {
+    void inline_transfer(eosio::name from, eosio::name to,eosio::name contract, eosio::asset quantity, std::string memo) const {
         struct transfer {
             eosio::name from;
             eosio::name to;
@@ -49,7 +59,7 @@ private:
         };
         eosio::action(
                 eosio::permission_level(from, ("active"_n)),
-                ("eosio.token"_n),
+                contract,
                 ("transfer"_n),
                 transfer{from, to, quantity, memo}
         ).send();
@@ -89,7 +99,8 @@ public:
         contract(receiver, code, ds),
         locks(receiver, receiver.value),
         fees(receiver, receiver.value),
-        adminstates(receiver, receiver.value)
+        adminstates(receiver, receiver.value),
+        supportsymbols(receiver,receiver.value)
     {
     }
 
@@ -101,6 +112,8 @@ public:
     ACTION setfeeac(const eosio::name& account);
     ACTION setadmin(const eosio::name& account);
     ACTION setdefee(uint64_t fee_rate);
+    ACTION setsymbols(const std::string& symbolname,uint8_t precision,const eosio::name& contract);
+    ACTION unsetsymbol(const std::string& symbolname, eosio::name& contract);
     ACTION cleanup();
 };
 
@@ -108,7 +121,7 @@ extern "C" {
 void apply(uint64_t receiver, uint64_t code, uint64_t action) {
     auto self = receiver;
 
-    if ((code == "eosio.token"_n.value) && (action == "transfer"_n.value)) {
+    if (action == "transfer"_n.value) {
         execute_action(eosio::name(receiver), eosio::name(code), &atomicswap::whentransfer);
         return;
     }
@@ -138,9 +151,17 @@ void apply(uint64_t receiver, uint64_t code, uint64_t action) {
         case eosio::name("setdefee").value:
             execute_action(eosio::name(receiver), eosio::name(code), &atomicswap::setdefee);
             break;
+        case eosio::name("setsymbols").value:
+            execute_action(eosio::name(receiver), eosio::name(code), &atomicswap::setsymbols);
+            break;
+        case eosio::name("unsetsymbol").value:
+            execute_action(eosio::name(receiver), eosio::name(code), &atomicswap::unsetsymbol);
+            break;
         case eosio::name("cleanup").value:
             execute_action(eosio::name(receiver), eosio::name(code), &atomicswap::cleanup);
             break;
+
+
     }
 }
 }

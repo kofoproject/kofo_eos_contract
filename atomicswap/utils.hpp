@@ -50,6 +50,10 @@ uint64_t uint64_hash(const string& hash) {
     return std::hash<string>{}(hash);
 }
 
+uint64_t uint64_hash(const eosio::extended_symbol& extsymbol) {
+    return std::hash<string>{}(extsymbol.get_symbol().code().to_string() + extsymbol.get_contract().to_string());
+}
+
 uint64_t uint64_hash(const capi_checksum256& hash) {
     return uint64_hash(sha256_to_hex(hash));
 }
