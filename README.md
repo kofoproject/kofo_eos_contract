@@ -1,4 +1,4 @@
-# KOFO EOS contract at  [atomicswap/](https://github.com/kofoproject/kofo_eos_contract/tree/master/atomicswap)
+# KOFO atomic swap `EOS/BOS/MEETONE` smart contract
 
 #### Compile contract 
 ```bash
@@ -7,9 +7,13 @@
 
 #### Deploy contract
 ```bash
- cleos set contract receiver.ac  ./atomicswap -p receiver.ac
+ cleos set contract kofoatmceos  ./atomicswap -p kofoatmceos
 ```
 #### Permission
 ```bash
-cleos set account permission receiver.ac active '{"threshold": 1,"keys": [{"key":${receiver.ac public key}, "weight":1}],"accounts": [{"permission":{"actor": "receiver.ac","permission":"eosio.code"},"weight":1}]}' owner -p receiver.ac@owner
+cleos set account permission kofoatmceos active '{"threshold": 1,"keys": [{"key":${kofoatmceos public key}, "weight":1}],"accounts": [{"permission":{"actor": "kofoatmceos","permission":"eosio.code"},"weight":1}]}' owner -p kofoatmceos@owner
 ```
+
+#### ABI
+
+cleos get abi kofoatmceos
