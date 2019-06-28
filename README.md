@@ -1,4 +1,4 @@
-# KOFO EOS contract at  [atomicswap/](https://github.com/kofoproject/kofo_eos_contract/tree/master/atomicswap)
+# KOFO EOS contract at  [atomicswap/](https://github.com/kofoproject/kofo_eos_contract/tree/release_1.0/atomicswap)
 
 #### Compile contract 
 ```bash
