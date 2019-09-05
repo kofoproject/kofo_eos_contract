@@ -1,6 +1,6 @@
 # KOFO atomic swap `EOS/BOS/MEETONE` smart contract
 
-Current version: [release_2.0](https://github.com/kofoproject/kofo_eos_contract/tree/release_2.0)
+Current version: [release_3.0](https://github.com/kofoproject/kofo_eos_contract/tree/release_3.0)
 
 #### Compile contract 
 ```bash
