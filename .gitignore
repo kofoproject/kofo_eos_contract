@@ -1,0 +1,5 @@
+.idea/
+.idea/vcs.xml
+.DS_Store
+atomicswap/*.abi
+atomicswap/*.wasm

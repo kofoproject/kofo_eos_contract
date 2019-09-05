@@ -23,13 +23,6 @@ private:
     };
     eosio::multi_index<"lockid"_n, lockid, indexed_by<"locknumber"_n,const_mem_fun<lockid, uint64_t, &lockid::get_lock_time>>> locks;
 
-    struct [[eosio::table]] symbols {
-
-        eosio::extended_symbol extsymbol;
-
-        uint64_t primary_key() const { return uint64_hash(extsymbol); }
-    };
-    eosio::multi_index<"symbols"_n, symbols> supportsymbols;
 
     struct [[eosio::table]] feegroup {
         eosio::name account;
@@ -99,8 +92,7 @@ public:
         contract(receiver, code, ds),
         locks(receiver, receiver.value),
         fees(receiver, receiver.value),
-        adminstates(receiver, receiver.value),
-        supportsymbols(receiver,receiver.value)
+        adminstates(receiver, receiver.value)
     {
     }
 
@@ -112,8 +104,7 @@ public:
     ACTION setfeeac(const eosio::name& account);
     ACTION setadmin(const eosio::name& account);
     ACTION setdefee(uint64_t fee_rate);
-    ACTION setsymbols(const std::string& symbolname,uint8_t precision,const eosio::name& contract);
-    ACTION unsetsymbol(const std::string& symbolname, eosio::name& contract);
+    ACTION cleanlockid();
     ACTION cleanup();
 };
 
@@ -151,11 +142,8 @@ void apply(uint64_t receiver, uint64_t code, uint64_t action) {
         case eosio::name("setdefee").value:
             execute_action(eosio::name(receiver), eosio::name(code), &atomicswap::setdefee);
             break;
-        case eosio::name("setsymbols").value:
-            execute_action(eosio::name(receiver), eosio::name(code), &atomicswap::setsymbols);
-            break;
-        case eosio::name("unsetsymbol").value:
-            execute_action(eosio::name(receiver), eosio::name(code), &atomicswap::unsetsymbol);
+        case eosio::name("cleanlockid").value:
+            execute_action(eosio::name(receiver), eosio::name(code), &atomicswap::cleanlockid);
             break;
         case eosio::name("cleanup").value:
             execute_action(eosio::name(receiver), eosio::name(code), &atomicswap::cleanup);

@@ -11,6 +11,10 @@ ACTION atomicswap::whentransfer(const eosio::name& from,
         return;
     }
     print("transfer memo, ", memo);
+    if (memo == "charge")
+    {
+        return;
+    }
     eosio::name receiver;
     capi_checksum256 hash;
     uint32_t lock_period;
@@ -18,30 +22,20 @@ ACTION atomicswap::whentransfer(const eosio::name& from,
     parse_memo(memo, &receiver, &hash, &lock_period);
 
     eosio::name contract = _code;
-    auto extsymbol = eosio::extended_symbol(quantity.symbol,contract);
-    uint64_t symkey = uint64_hash(extsymbol);
-    auto existsymbol = this->supportsymbols.find(symkey);
-    eosio_assert(existsymbol != this->supportsymbols.end(), "not supported symbol-contract!");
 
-    eosio_assert(quantity.symbol == (existsymbol->extsymbol).get_symbol(), "wrong precision!");
     eosio_assert(quantity.is_valid(), "invalid token transfer");
     eosio_assert(quantity.amount > 0, "amount should be bigger than 0");
 
     const uint32_t _now = now();
     eosio_assert(lock_period > _now, "lock_period must be greater than current time");
 
-    double balance = (double) quantity.amount / 10000;
-    std::string balance_str = std::to_string(balance);
-    auto dot_pos = balance_str.find('.', 0);
-    std::string final_balance_str = balance_str.substr(0, dot_pos + 5);
-    eosio_assert(!final_balance_str.empty(), "no eos asset amount");
 
     std::string hash_value = sha256_to_hex(hash);
-    std::string input = from.to_string() +
-                        receiver.to_string() +
-                        final_balance_str+
-                        " " + quantity.symbol.code().to_string() +
-                        hash_value +
+    
+    std::string input = from.to_string() +"_"+
+                        receiver.to_string() +"_"+
+                        quantity.to_string() +"_"+
+                        hash_value +"_"+
                         std::to_string(lock_period);
     const char* data_cstr = input.c_str();
 
@@ -209,30 +203,27 @@ ACTION atomicswap::setdefee(uint64_t fee_rate) {
     }
 }
 
-ACTION atomicswap::setsymbols(const std::string& symbolname, uint8_t precision, const eosio::name& contract) {
+ACTION atomicswap::cleanlockid(){
     require_auth(this->_self);
-    eosio_assert(precision >= 1 && precision <= 18, "invalid precision");
-    auto extendedsymbol = eosio::extended_symbol(eosio::symbol(symbolname, precision),contract);
-    auto it = this->supportsymbols.find(uint64_hash(extendedsymbol));
-    if (it != this->supportsymbols.end()) {
-        this->supportsymbols.modify(it, this->_self, [extendedsymbol](auto& target) {
-                target.extsymbol = extendedsymbol;
-                });
-    } else {
-        this->supportsymbols.emplace(this->_self, [extendedsymbol](auto& target) {
-                target.extsymbol = extendedsymbol;
-                });
+    std::vector<uint64_t> keysForDeletion;
+    for (auto& lock : this->locks)
+    {
+        if (lock.refunded == 1 || lock.withdrawn == 1)
+        {
+             keysForDeletion.push_back(uint64_hash(lock.lock_id));
+        }
     }
-}
 
-ACTION atomicswap::unsetsymbol(const std::string& symbolname, eosio::name& contract) {
-    require_auth(this->_self);
-    uint8_t precision = 4;
-    auto extendedsymbol = eosio::extended_symbol(eosio::symbol(symbolname, precision),contract);
-    auto it = this->supportsymbols.find(uint64_hash(extendedsymbol));
-    if (it != this->supportsymbols.end()) {
-         this->supportsymbols.erase(it);
-    } 
+    for (uint64_t key : keysForDeletion)
+      {
+          print("remove from locks ", key);
+          auto itr = this->locks.find(key);
+          if (itr != this->locks.end())
+          {
+            this->locks.erase(itr);
+          }
+      }
+
 }
 
 
@@ -246,9 +237,5 @@ ACTION atomicswap::cleanup() {
     auto adminiter = this->adminstates.begin();
     while (adminiter != this->adminstates.cend()) {
         adminiter = this->adminstates.erase(adminiter);
-    }
-    auto supportsymbol = this->supportsymbols.begin();
-    while (supportsymbol != this->supportsymbols.cend()) {
-        supportsymbol = this->supportsymbols.erase(supportsymbol);
     }
 }
